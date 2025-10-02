@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotBird JSON Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        .json-editor {
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .json-key {
+            color: #881391;
+        }
+        .json-string {
+            color: #c41a16;
+        }
+        .json-number {
+            color: #1c00cf;
+        }
+        .json-boolean {
+            color: #0d22aa;
+        }
+        .json-null {
+            color: #808080;
+        }
+        .item-card {
+            transition: all 0.2s ease;
+        }
+        .item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">HotBird Menu Editor</h1>
+            <p class="text-gray-600">Upload, edit, and manage your menu JSON files with this tool</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- File Upload Section -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Upload JSON File</h2>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-4">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-600 mb-4">Drag & drop your JSON file here or click to browse</p>
+                    <input type="file" id="json-file-input" accept=".json" class="hidden">
+                    <button id="upload-btn" class="bg-[#D62616] hover:bg-[#a01c10] text-white font-medium py-2 px-4 rounded">
+                        Select JSON File
+                    </button>
+                </div>
+                <div id="file-info" class="hidden bg-gray-50 p-4 rounded-lg">
+                    <h3 class="font-medium text-gray-800 mb-2">Loaded File: <span id="file-name" class="font-semibold"></span></h3>
+                    <p class="text-sm text-gray-600"><span id="item-count">0</span> menu items loaded</p>
+                </div>
+            </div>
+
+            <!-- File Actions Section -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">File Actions</h2>
+                <div class="space-y-4">
+                    <button id="download-btn" disabled class="w-full bg-[#D62616] hover:bg-[#a01c10] disabled:bg-[#D62616]/50 text-white font-medium py-3 px-4 rounded flex items-center justify-center">
+                        <i class="fas fa-download mr-2"></i> Download Modified JSON
+                    </button>
+                    <button id="copy-file-btn" disabled class="w-full bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white font-medium py-3 px-4 rounded flex items-center justify-center">
+                        <i class="fas fa-copy mr-2"></i> Copy File As...
+                    </button>
+                    <button id="new-item-btn" disabled class="w-full bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-medium py-3 px-4 rounded flex items-center justify-center">
+                        <i class="fas fa-plus-circle mr-2"></i> Add New Menu Item
+                    </button>
+                    <button id="reset-btn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded flex items-center justify-center">
+                        <i class="fas fa-redo mr-2"></i> Reset Editor
+                    </button>
+                </div>
+                
+                <div class="mt-6">
+                    <h3 class="font-medium text-gray-800 mb-2">JSON Structure Guide</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg text-sm">
+                        <p class="text-gray-600 mb-2">Each menu item should have these properties:</p>
+                        <ul class="list-disc pl-5 text-gray-600">
+                            <li><span class="font-mono">name</span> (string)</li>
+                            <li><span class="font-mono">description</span> (string)</li>
+                            <li><span class="font-mono">image</span> (string, path to image)</li>
+                            <li><span class="font-mono">price</span> (number, optional if options exist)</li>
+                            <li><span class="font-mono">tags</span> (array of strings)</li>
+                            <li><span class="font-mono">mealPriceModifier</span> (number)</li>
+                            <li><span class="font-mono">showSlider</span> (boolean)</li>
+                            <li><span class="font-mono">sauces</span> (boolean)</li>
+                            <li><span class="font-mono">vegetables</span> (boolean)</li>
+                            <li><span class="font-mono">options</span> (array of objects, optional)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Editor Section -->
+        <div id="editor-section" class="hidden mt-8">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Menu Items Editor</h2>
+            <div id="items-container" class="grid grid-cols-1 gap-6">
+                <!-- Items will be dynamically added here -->
+            </div>
+        </div>
+
+        <!-- New Item Modal -->
+        <div id="new-item-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-3/4 lg:w-2/3 max-h-screen overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-800">Add New Menu Item</h3>
+                        <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div id="new-item-form" class="space-y-4">
+                        <!-- Form will be dynamically generated -->
+                    </div>
+                    <div class="flex justify-end mt-6 space-x-3">
+                        <button id="cancel-new-item" class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100">Cancel</button>
+                        <button id="save-new-item" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save Item</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Copy File Modal -->
+        <div id="copy-file-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-1/2 lg:w-1/3">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-800">Copy File As</h3>
+                        <button id="close-copy-modal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">New File Name</label>
+                            <input type="text" id="new-file-name" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="e.g., new-menu.json">
+                        </div>
+                    </div>
+                    <div class="flex justify-end mt-6 space-x-3">
+                        <button id="cancel-copy" class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100">Cancel</button>
+                        <button id="confirm-copy" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">Copy File</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentJsonData = null;
+        let currentFileName = '';
+
+        // DOM elements
+        const fileInput = document.getElementById('json-file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInfo = document.getElementById('file-info');
+        const fileName = document.getElementById('file-name');
+        const itemCount = document.getElementById('item-count');
+        const downloadBtn = document.getElementById('download-btn');
+        const copyFileBtn = document.getElementById('copy-file-btn');
+        const newItemBtn = document.getElementById('new-item-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const editorSection = document.getElementById('editor-section');
+        const itemsContainer = document.getElementById('items-container');
+        const newItemModal = document.getElementById('new-item-modal');
+        const closeModal = document.getElementById('close-modal');
+        const cancelNewItem = document.getElementById('cancel-new-item');
+        const saveNewItem = document.getElementById('save-new-item');
+        const newItemForm = document.getElementById('new-item-form');
+        const copyFileModal = document.getElementById('copy-file-modal');
+        const closeCopyModal = document.getElementById('close-copy-modal');
+        const cancelCopy = document.getElementById('cancel-copy');
+        const confirmCopy = document.getElementById('confirm-copy');
+        const newFileName = document.getElementById('new-file-name');
+
+        // Event listeners
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileUpload);
+        downloadBtn.addEventListener('click', downloadJson);
+        copyFileBtn.addEventListener('click', showCopyFileModal);
+        newItemBtn.addEventListener('click', showNewItemModal);
+        resetBtn.addEventListener('click', resetEditor);
+        closeModal.addEventListener('click', hideNewItemModal);
+        cancelNewItem.addEventListener('click', hideNewItemModal);
+        saveNewItem.addEventListener('click', saveNewItemToJson);
+        closeCopyModal.addEventListener('click', hideCopyFileModal);
+        cancelCopy.addEventListener('click', hideCopyFileModal);
+        confirmCopy.addEventListener('click', copyFile);
+
+        // Handle file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file || !file.name.endsWith('.json')) {
+                alert('Please select a valid JSON file');
+                return;
+            }
+
+            currentFileName = file.name;
+            fileName.textContent = currentFileName;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    currentJsonData = JSON.parse(e.target.result);
+                    itemCount.textContent = currentJsonData.items.length;
+                    fileInfo.classList.remove('hidden');
+                    downloadBtn.disabled = false;
+                    copyFileBtn.disabled = false;
+                    newItemBtn.disabled = false;
+                    editorSection.classList.remove('hidden');
+                    renderItemsEditor();
+                } catch (error) {
+                    alert('Error parsing JSON: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Render the items editor
+        function renderItemsEditor() {
+            itemsContainer.innerHTML = '';
+            
+            currentJsonData.items.forEach((item, index) => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'item-card bg-white rounded-lg shadow p-6';
+                itemCard.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-medium text-gray-800">${item.name}</h3>
+                        <button class="delete-item text-red-500 hover:text-red-700" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <input type="text" value="${escapeHtml(item.name)}" data-field="name" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                            <input type="number" step="0.01" value="${item.price || ''}" data-field="price" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea data-field="description" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">${escapeHtml(item.description)}</textarea>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Image Path</label>
+                            <input type="text" value="${escapeHtml(item.image)}" data-field="image" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
+                            <input type="text" value="${Array.isArray(item.tags) ? item.tags.join(', ') : ''}" data-field="tags" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Meal Price Modifier</label>
+                            <input type="number" step="0.01" value="${item.mealPriceModifier}" data-field="mealPriceModifier" data-index="${index}" 
+                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" ${item.showSlider ? 'checked' : ''} data-field="showSlider" data-index="${index}" 
+                                class="item-field h-5 w-5 text-[#D62616] rounded">
+                            <label class="ml-2 text-sm font-medium text-gray-700">Show Slider</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" ${item.sauces ? 'checked' : ''} data-field="sauces" data-index="${index}" 
+                                class="item-field h-5 w-5 text-[#D62616] rounded">
+                            <label class="ml-2 text-sm font-medium text-gray-700">Sauces</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" ${item.vegetables ? 'checked' : ''} data-field="vegetables" data-index="${index}" 
+                                class="item-field h-5 w-5 text-[#D62616] rounded">
+                            <label class="ml-2 text-sm font-medium text-gray-700">Vegetables</label>
+                        </div>
+                    </div>
+                    ${item.options ? `
+                    <div class="mt-4">
+                        <h4 class="text-md font-medium text-gray-800 mb-2">Options</h4>
+                        <div id="options-${index}" class="space-y-2">
+                            ${item.options.map((option, optIndex) => `
+                                <div class="flex items-center space-x-2">
+                                    <input type="text" placeholder="Option name" value="${escapeHtml(option.name)}" 
+                                        data-option-field="name" data-index="${index}" data-option-index="${optIndex}" 
+                                        class="option-field w-1/2 px-3 py-1 border border-gray-300 rounded-md">
+                                    <input type="number" step="0.01" placeholder="Price" value="${option.price}" 
+                                        data-option-field="price" data-index="${index}" data-option-index="${optIndex}" 
+                                        class="option-field w-1/3 px-3 py-1 border border-gray-300 rounded-md">
+                                    <button class="delete-option text-red-500 hover:text-red-700" data-index="${index}" data-option-index="${optIndex}">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="add-option mt-2 text-sm text-[#D62616] hover:text-[#a01c10]" data-index="${index}">
+                            <i class="fas fa-plus mr-1"></i> Add Option
+                        </button>
+                    </div>
+                    ` : ''}
+                `;
+                itemsContainer.appendChild(itemCard);
+            });
+
+            // Add event listeners to all dynamic fields
+            document.querySelectorAll('.item-field').forEach(field => {
+                field.addEventListener('change', updateItemField);
+                field.addEventListener('input', updateItemField);
+            });
+
+            document.querySelectorAll('.option-field').forEach(field => {
+                field.addEventListener('change', updateOptionField);
+                field.addEventListener('input', updateOptionField);
+            });
+
+            document.querySelectorAll('.delete-item').forEach(button => {
+                button.addEventListener('click', deleteItem);
+            });
+
+            document.querySelectorAll('.delete-option').forEach(button => {
+                button.addEventListener('click', deleteOption);
+            });
+
+            document.querySelectorAll('.add-option').forEach(button => {
+                button.addEventListener('click', addOption);
+            });
+        }
+
+        // Update item field
+        function updateItemField(event) {
+            const index = parseInt(event.target.dataset.index);
+            const field = event.target.dataset.field;
+            let value = event.target.value;
+            
+            if (field === 'tags') {
+                value = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+            } else if (field === 'price' || field === 'mealPriceModifier') {
+                value = parseFloat(value) || 0;
+            } else if (field === 'showSlider' || field === 'sauces' || field === 'vegetables') {
+                value = event.target.checked;
+            }
+            
+            currentJsonData.items[index][field] = value;
+        }
+
+        // Update option field
+        function updateOptionField(event) {
+            const index = parseInt(event.target.dataset.index);
+            const optionIndex = parseInt(event.target.dataset.optionIndex);
+            const field = event.target.dataset.optionField;
+            let value = event.target.value;
+            
+            if (field === 'price') {
+                value = parseFloat(value) || 0;
+            }
+            
+            // Initialize options array if it doesn't exist
+            if (!currentJsonData.items[index].options) {
+                currentJsonData.items[index].options = [];
+            }
+            
+            // Initialize option object if it doesn't exist
+            if (!currentJsonData.items[index].options[optionIndex]) {
+                currentJsonData.items[index].options[optionIndex] = {};
+            }
+            
+            currentJsonData.items[index].options[optionIndex][field] = value;
+        }
+
+        // Delete item
+        function deleteItem(event) {
+            const index = parseInt(event.currentTarget.dataset.index);
+            currentJsonData.items.splice(index, 1);
+            itemCount.textContent = currentJsonData.items.length;
+            renderItemsEditor();
+        }
+
+        // Delete option
+        function deleteOption(event) {
+            const index = parseInt(event.currentTarget.dataset.index);
+            const optionIndex = parseInt(event.currentTarget.dataset.optionIndex);
+            
+            if (currentJsonData.items[index].options) {
+                currentJsonData.items[index].options.splice(optionIndex, 1);
+                
+                // Remove options array if empty
+                if (currentJsonData.items[index].options.length === 0) {
+                    delete currentJsonData.items[index].options;
+                }
+                
+                renderItemsEditor();
+            }
+        }
+
+        // Add option
+        function addOption(event) {
+            const index = parseInt(event.currentTarget.dataset.index);
+            
+            // Initialize options array if it doesn't exist
+            if (!currentJsonData.items[index].options) {
+                currentJsonData.items[index].options = [];
+            }
+            
+            currentJsonData.items[index].options.push({
+                name: '',
+                price: 0
+            });
+            
+            renderItemsEditor();
+        }
+
+        // Show new item modal
+        function showNewItemModal() {
+            newItemForm.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                        <input type="text" id="new-item-name" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                        <input type="number" step="0.01" id="new-item-price" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                        <textarea id="new-item-description" class="w-full px-3 py-2 border border-gray-300 rounded-md" required></textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Image Path</label>
+                        <input type="text" id="new-item-image" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="images/">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated) *</label>
+                        <input type="text" id="new-item-tags" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Meal Price Modifier</label>
+                        <input type="number" step="0.01" id="new-item-mealPriceModifier" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="0">
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="new-item-showSlider" class="h-5 w-5 text-[#D62616] rounded">
+                        <label class="ml-2 text-sm font-medium text-gray-700">Show Slider</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="new-item-sauces" class="h-5 w-5 text-[#D62616] rounded">
+                        <label class="ml-2 text-sm font-medium text-gray-700">Sauces</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="new-item-vegetables" class="h-5 w-5 text-[#D62616] rounded">
+                        <label class="ml-2 text-sm font-medium text-gray-700">Vegetables</label>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Options</label>
+                        <div id="new-item-options" class="space-y-2 mb-2">
+                            <!-- Options will be added here -->
+                        </div>
+                        <button type="button" id="add-new-option" class="text-sm text-[#D62616] hover:text-[#a01c10]">
+                            <i class="fas fa-plus mr-1"></i> Add Option
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Add event listener for adding options in the new item form
+            document.getElementById('add-new-option').addEventListener('click', addNewOption);
+            
+            newItemModal.classList.remove('hidden');
+        }
+
+        // Add option to new item form
+        function addNewOption() {
+            const optionsContainer = document.getElementById('new-item-options');
+            const optionIndex = optionsContainer.children.length;
+            
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'flex items-center space-x-2';
+            optionDiv.innerHTML = `
+                <input type="text" placeholder="Option name" 
+                    class="new-option-name w-1/2 px-3 py-1 border border-gray-300 rounded-md">
+                <input type="number" step="0.01" placeholder="Price" 
+                    class="new-option-price w-1/3 px-3 py-1 border border-gray-300 rounded-md">
+                <button class="remove-new-option text-red-500 hover:text-red-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            optionsContainer.appendChild(optionDiv);
+            
+            // Add event listener to remove button
+            optionDiv.querySelector('.remove-new-option').addEventListener('click', function() {
+                optionsContainer.removeChild(optionDiv);
+            });
+        }
+
+        // Hide new item modal
+        function hideNewItemModal() {
+            newItemModal.classList.add('hidden');
+        }
+
+        // Save new item to JSON
+        function saveNewItemToJson() {
+            const name = document.getElementById('new-item-name').value;
+            const description = document.getElementById('new-item-description').value;
+            const tags = document.getElementById('new-item-tags').value;
+            
+            if (!name || !description || !tags) {
+                alert('Please fill in all required fields (name, description, tags)');
+                return;
+            }
+            
+            const newItem = {
+                name: name,
+                description: description,
+                image: document.getElementById('new-item-image').value || 'images/',
+                tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
+                mealPriceModifier: parseFloat(document.getElementById('new-item-mealPriceModifier').value) || 0,
+                showSlider: document.getElementById('new-item-showSlider').checked,
+                sauces: document.getElementById('new-item-sauces').checked,
+                vegetables: document.getElementById('new-item-vegetables').checked
+            };
+            
+            const price = document.getElementById('new-item-price').value;
+            if (price) {
+                newItem.price = parseFloat(price);
+            }
+            
+            // Process options
+            const optionElements = document.querySelectorAll('#new-item-options > div');
+            if (optionElements.length > 0) {
+                newItem.options = [];
+                
+                optionElements.forEach(optionEl => {
+                    const optionName = optionEl.querySelector('.new-option-name').value;
+                    const optionPrice = optionEl.querySelector('.new-option-price').value;
+                    
+                    if (optionName) {
+                        newItem.options.push({
+                            name: optionName,
+                            price: parseFloat(optionPrice) || 0
+                        });
+                    }
+                });
+                
+                // Remove options if empty
+                if (newItem.options.length === 0) {
+                    delete newItem.options;
+                }
+            }
+            
+            currentJsonData.items.push(newItem);
+            itemCount.textContent = currentJsonData.items.length;
+            renderItemsEditor();
+            hideNewItemModal();
+        }
+
+        // Show copy file modal
+        function showCopyFileModal() {
+            newFileName.value = currentFileName.replace('.json', '-copy.json');
+            copyFileModal.classList.remove('hidden');
+        }
+
+        // Hide copy file modal
+        function hideCopyFileModal() {
+            copyFileModal.classList.add('hidden');
+        }
+
+        // Copy file with new name
+        function copyFile() {
+            const fileName = newFileName.value;
+            if (!fileName) {
+                alert('Please enter a file name');
+                return;
+            }
+            
+            if (!fileName.endsWith('.json')) {
+                alert('File name must end with .json');
+                return;
+            }
+            
+            currentFileName = fileName;
+            downloadJson();
+            hideCopyFileModal();
+        }
+
+        // Download JSON
+        function downloadJson() {
+            if (!currentJsonData) return;
+            
+            const dataStr = JSON.stringify(currentJsonData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = currentFileName;
+            link.click();
+        }
+
+        // Reset editor
+        function resetEditor() {
+            currentJsonData = null;
+            currentFileName = '';
+            fileInput.value = '';
+            fileInfo.classList.add('hidden');
+            downloadBtn.disabled = true;
+            copyFileBtn.disabled = true;
+            newItemBtn.disabled = true;
+            editorSection.classList.add('hidden');
+            itemsContainer.innerHTML = '';
+        }
+
+        // Utility function to escape HTML
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return unsafe.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
