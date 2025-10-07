@@ -84,6 +84,27 @@
             background-color: #D62616;
             color: white;
         }
+        .file-tab {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            background-color: #f3f4f6;
+            border-radius: 0.375rem;
+            cursor: pointer;
+        }
+        .file-tab.active {
+            background-color: #D62616;
+            color: white;
+        }
+        .file-tab .close {
+            margin-left: 0.5rem;
+            opacity: 0.7;
+        }
+        .file-tab .close:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -105,12 +126,43 @@
                         Select JSON Files
                     </button>
                 </div>
+                
+                <!-- File Tabs -->
+                <div id="file-tabs" class="mb-4">
+                    <!-- File tabs will be dynamically added here -->
+                </div>
+                
                 <div id="file-info" class="hidden bg-gray-50 p-4 rounded-lg">
                     <h3 class="font-medium text-gray-800 mb-2">Loaded Files:</h3>
                     <ul id="file-list" class="text-sm text-gray-600">
                         <!-- Files will be listed here -->
                     </ul>
-                    <p class="mt-2"><span id="item-count">0</span> menu items loaded</p>
+                    <p class="mt-2"><span id="item-count">0</span> menu items loaded in current file</p>
+                </div>
+                
+                <!-- JSON Text Editor Section -->
+                <div class="mt-6">
+                    <h3 class="text-lg font-semibold mb-2 text-gray-800">JSON Text Editor</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select File to Edit</label>
+                            <select id="json-file-selector" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <option value="">Select a file...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">JSON Content</label>
+                            <textarea id="json-text-editor" rows="10" class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm" placeholder="Paste JSON content here..."></textarea>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="update-json-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded">
+                                Update from Text
+                            </button>
+                            <button id="copy-json-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded">
+                                Copy JSON
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -219,6 +271,7 @@
         const uploadBtn = document.getElementById('upload-btn');
         const fileInfo = document.getElementById('file-info');
         const fileList = document.getElementById('file-list');
+        const fileTabs = document.getElementById('file-tabs');
         const itemCount = document.getElementById('item-count');
         const downloadBtn = document.getElementById('download-btn');
         const copyFileBtn = document.getElementById('copy-file-btn');
@@ -236,6 +289,10 @@
         const cancelCopy = document.getElementById('cancel-copy');
         const confirmCopy = document.getElementById('confirm-copy');
         const newFileName = document.getElementById('new-file-name');
+        const jsonFileSelector = document.getElementById('json-file-selector');
+        const jsonTextEditor = document.getElementById('json-text-editor');
+        const updateJsonBtn = document.getElementById('update-json-btn');
+        const copyJsonBtn = document.getElementById('copy-json-btn');
 
         // Event listeners
         uploadBtn.addEventListener('click', () => fileInput.click());
@@ -250,6 +307,9 @@
         closeCopyModal.addEventListener('click', hideCopyFileModal);
         cancelCopy.addEventListener('click', hideCopyFileModal);
         confirmCopy.addEventListener('click', copyFile);
+        jsonFileSelector.addEventListener('change', updateJsonTextEditor);
+        updateJsonBtn.addEventListener('click', updateJsonFromText);
+        copyJsonBtn.addEventListener('click', copyJsonToClipboard);
 
         // Handle file upload
         function handleFileUpload(event) {
@@ -259,17 +319,22 @@
                 return;
             }
 
-            // Reset allMenuItems
-            allMenuItems = {};
-            fileList.innerHTML = '';
-            
             let loadedFiles = 0;
-            let totalItems = 0;
+            let totalFiles = files.length;
             
             files.forEach(file => {
                 if (!file.name.endsWith('.json')) {
                     alert(`File "${file.name}" is not a valid JSON file`);
+                    totalFiles--;
                     return;
+                }
+
+                // Check if file is already loaded
+                if (allMenuItems[file.name]) {
+                    if (!confirm(`File "${file.name}" is already loaded. Do you want to replace it?`)) {
+                        totalFiles--;
+                        return;
+                    }
                 }
 
                 const reader = new FileReader();
@@ -278,41 +343,182 @@
                         const jsonData = JSON.parse(e.target.result);
                         allMenuItems[file.name] = jsonData;
                         
-                        // Add to file list
-                        const fileItem = document.createElement('li');
-                        fileItem.textContent = `${file.name} (${jsonData.items.length} items)`;
-                        fileList.appendChild(fileItem);
-                        
                         loadedFiles++;
-                        totalItems += jsonData.items.length;
                         
                         // If this is the first file, set it as current
-                        if (loadedFiles === 1) {
+                        if (Object.keys(allMenuItems).length === 1) {
                             currentFileName = file.name;
                             currentJsonData = jsonData;
                         }
                         
                         // If all files are loaded, update UI
-                        if (loadedFiles === files.length) {
-                            itemCount.textContent = totalItems;
-                            fileInfo.classList.remove('hidden');
-                            downloadBtn.disabled = false;
-                            copyFileBtn.disabled = false;
-                            newItemBtn.disabled = false;
-                            editorSection.classList.remove('hidden');
-                            renderItemsEditor();
+                        if (loadedFiles === totalFiles) {
+                            updateFileTabs();
+                            updateFileList();
+                            updateJsonFileSelector();
+                            
+                            if (currentFileName === file.name) {
+                                updateItemCount();
+                                fileInfo.classList.remove('hidden');
+                                downloadBtn.disabled = false;
+                                copyFileBtn.disabled = false;
+                                newItemBtn.disabled = false;
+                                editorSection.classList.remove('hidden');
+                                renderItemsEditor();
+                            }
                         }
                     } catch (error) {
                         alert(`Error parsing JSON in file "${file.name}": ${error.message}`);
+                        totalFiles--;
                     }
                 };
                 reader.readAsText(file);
             });
+            
+            // Reset file input to allow selecting the same file again
+            fileInput.value = '';
+        }
+
+        // Update file tabs
+        function updateFileTabs() {
+            fileTabs.innerHTML = '';
+            
+            Object.keys(allMenuItems).forEach(fileName => {
+                const tab = document.createElement('div');
+                tab.className = `file-tab ${fileName === currentFileName ? 'active' : ''}`;
+                tab.innerHTML = `
+                    <span>${fileName}</span>
+                    <span class="close" data-file="${fileName}">&times;</span>
+                `;
+                
+                tab.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('close')) {
+                        e.stopPropagation();
+                        removeFile(fileName);
+                    } else {
+                        switchToFile(fileName);
+                    }
+                });
+                
+                fileTabs.appendChild(tab);
+            });
+        }
+
+        // Update file list
+        function updateFileList() {
+            fileList.innerHTML = '';
+            
+            Object.keys(allMenuItems).forEach(fileName => {
+                const fileItem = document.createElement('li');
+                fileItem.textContent = `${fileName} (${allMenuItems[fileName].items.length} items)`;
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        // Update JSON file selector
+        function updateJsonFileSelector() {
+            jsonFileSelector.innerHTML = '<option value="">Select a file...</option>';
+            
+            Object.keys(allMenuItems).forEach(fileName => {
+                const option = document.createElement('option');
+                option.value = fileName;
+                option.textContent = fileName;
+                jsonFileSelector.appendChild(option);
+            });
+        }
+
+        // Update item count
+        function updateItemCount() {
+            if (currentJsonData) {
+                itemCount.textContent = currentJsonData.items.length;
+            } else {
+                itemCount.textContent = '0';
+            }
+        }
+
+        // Switch to a different file
+        function switchToFile(fileName) {
+            currentFileName = fileName;
+            currentJsonData = allMenuItems[fileName];
+            
+            updateFileTabs();
+            updateItemCount();
+            renderItemsEditor();
+            updateJsonTextEditor();
+        }
+
+        // Remove a file
+        function removeFile(fileName) {
+            if (Object.keys(allMenuItems).length === 1) {
+                alert('You cannot remove the last file');
+                return;
+            }
+            
+            delete allMenuItems[fileName];
+            
+            if (fileName === currentFileName) {
+                // Switch to the first available file
+                const firstFile = Object.keys(allMenuItems)[0];
+                switchToFile(firstFile);
+            } else {
+                updateFileTabs();
+                updateFileList();
+                updateJsonFileSelector();
+            }
+        }
+
+        // Update JSON text editor
+        function updateJsonTextEditor() {
+            if (currentJsonData) {
+                jsonTextEditor.value = JSON.stringify(currentJsonData, null, 2);
+            } else {
+                jsonTextEditor.value = '';
+            }
+        }
+
+        // Update JSON from text
+        function updateJsonFromText() {
+            const selectedFile = jsonFileSelector.value;
+            if (!selectedFile) {
+                alert('Please select a file to update');
+                return;
+            }
+            
+            try {
+                const jsonData = JSON.parse(jsonTextEditor.value);
+                allMenuItems[selectedFile] = jsonData;
+                
+                if (selectedFile === currentFileName) {
+                    currentJsonData = jsonData;
+                    updateItemCount();
+                    renderItemsEditor();
+                }
+                
+                alert('JSON updated successfully!');
+            } catch (error) {
+                alert(`Error parsing JSON: ${error.message}`);
+            }
+        }
+
+        // Copy JSON to clipboard
+        function copyJsonToClipboard() {
+            if (!jsonTextEditor.value) {
+                alert('No JSON content to copy');
+                return;
+            }
+            
+            jsonTextEditor.select();
+            document.execCommand('copy');
+            alert('JSON copied to clipboard!');
         }
 
         // Render the items editor
         function renderItemsEditor() {
             itemsContainer.innerHTML = '';
+            
+            if (!currentJsonData || !currentJsonData.items) {
+                return;
+            }
             
             currentJsonData.items.forEach((item, index) => {
                 const itemCard = document.createElement('div');
@@ -473,6 +679,7 @@
             }
             
             currentJsonData.items[index][field] = value;
+            updateJsonTextEditor();
         }
 
         // Update option field
@@ -497,14 +704,16 @@
             }
             
             currentJsonData.items[index].options[optionIndex][field] = value;
+            updateJsonTextEditor();
         }
 
         // Delete item
         function deleteItem(event) {
             const index = parseInt(event.currentTarget.dataset.index);
             currentJsonData.items.splice(index, 1);
-            itemCount.textContent = currentJsonData.items.length;
+            updateItemCount();
             renderItemsEditor();
+            updateJsonTextEditor();
         }
 
         // Delete option
@@ -521,6 +730,7 @@
                 }
                 
                 renderItemsEditor();
+                updateJsonTextEditor();
             }
         }
 
@@ -539,6 +749,7 @@
             });
             
             renderItemsEditor();
+            updateJsonTextEditor();
         }
 
         // Delete combo item
@@ -555,6 +766,7 @@
                 }
                 
                 renderItemsEditor();
+                updateJsonTextEditor();
             }
         }
 
@@ -800,6 +1012,7 @@
                 document.body.removeChild(formModal);
                 document.body.removeChild(modal);
                 renderItemsEditor();
+                updateJsonTextEditor();
             });
         }
 
@@ -954,8 +1167,9 @@
             }
             
             currentJsonData.items.push(newItem);
-            itemCount.textContent = currentJsonData.items.length;
+            updateItemCount();
             renderItemsEditor();
+            updateJsonTextEditor();
             hideNewItemModal();
         }
 
@@ -1013,6 +1227,9 @@
             newItemBtn.disabled = true;
             editorSection.classList.add('hidden');
             itemsContainer.innerHTML = '';
+            fileTabs.innerHTML = '';
+            jsonFileSelector.innerHTML = '<option value="">Select a file...</option>';
+            jsonTextEditor.value = '';
         }
 
         // Utility function to escape HTML
