@@ -96,6 +96,18 @@
         .file-tab .close:hover {
             opacity: 1;
         }
+        .tag-info {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+        .combo-item {
+            background-color: #f8f9fa;
+            border-left: 4px solid #D62616;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.25rem;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -191,6 +203,8 @@
                             <li><span class="font-mono">vegetables</span> (boolean)</li>
                             <li><span class="font-mono">showDrinksDropdown</span> (boolean)</li>
                             <li><span class="font-mono">options</span> (array of objects, optional)</li>
+                            <li><span class="font-mono">comboItems</span> (array of objects, optional)</li>
+                            <li><span class="font-mono">bs</span> (boolean, optional)</li>
                         </ul>
                     </div>
                 </div>
@@ -256,6 +270,21 @@
         let currentJsonData = null;
         let currentFileName = '';
         let allMenuItems = {}; // Store all items from all loaded files
+
+        // Tag definitions with explanations
+        const tagDefinitions = {
+            "all": "Shows all menu items",
+            "hotdeals": "Special promotional deals and offers",
+            "hotbuckets": "Bucket meals with multiple pieces of chicken",
+            "hotbirds": "Individual chicken items like burgers and sandwiches",
+            "wings": "Chicken wings with various flavor options",
+            "hottenders": "Chicken tenders and strips",
+            "sauces": "Dips and sauces for chicken items",
+            "drinks": "Beverages and drinks",
+            "D": "Items that use the image position slider (for vertical adjustment)",
+            "M": "Items that show the full image without cropping",
+            "bs": "Best seller items - highlighted as popular choices"
+        };
 
         // DOM elements
         const fileInput = document.getElementById('json-file-input');
@@ -544,9 +573,19 @@
                                 class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
                         </div>
                         <div class="md:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
-                            <input type="text" value="${Array.isArray(item.tags) ? item.tags.join(', ') : ''}" data-field="tags" data-index="${index}" 
-                                class="item-field w-full px-3 py-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                            <div class="dropdown-container">
+                                <input type="text" value="${Array.isArray(item.tags) ? item.tags.join(', ') : ''}" data-field="tags" data-index="${index}" 
+                                    class="item-field w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Click to select tags">
+                                <div class="dropdown-menu hidden" id="tags-dropdown-${index}">
+                                    ${Object.keys(tagDefinitions).map(tag => `
+                                        <div class="dropdown-item" data-tag="${tag}">
+                                            <span class="font-medium">${tag}</span>
+                                            <div class="tag-info">${tagDefinitions[tag]}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Meal Price Modifier</label>
@@ -573,6 +612,11 @@
                                 class="item-field h-5 w-5 text-[#D62616] rounded">
                             <label class="ml-2 text-sm font-medium text-gray-700">Show Drinks Dropdown</label>
                         </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" ${item.bs ? 'checked' : ''} data-field="bs" data-index="${index}" 
+                                class="item-field h-5 w-5 text-[#D62616] rounded">
+                            <label class="ml-2 text-sm font-medium text-gray-700">Best Seller (bs)</label>
+                        </div>
                     </div>
                     ${item.options ? `
                     <div class="mt-4">
@@ -597,6 +641,34 @@
                         </button>
                     </div>
                     ` : ''}
+                    ${item.comboItems ? `
+                    <div class="mt-4">
+                        <h4 class="text-md font-medium text-gray-800 mb-2">Combo Items</h4>
+                        <div id="combo-items-${index}" class="space-y-2">
+                            ${item.comboItems.map((comboItem, comboIndex) => `
+                                <div class="combo-item">
+                                    <div class="flex items-center space-x-2 mb-2">
+                                        <input type="text" placeholder="Item name" value="${escapeHtml(comboItem.name)}" 
+                                            data-combo-field="name" data-index="${index}" data-combo-index="${comboIndex}" 
+                                            class="combo-field w-1/2 px-3 py-1 border border-gray-300 rounded-md">
+                                        <input type="number" placeholder="Quantity" value="${comboItem.quantity}" 
+                                            data-combo-field="quantity" data-index="${index}" data-combo-index="${comboIndex}" 
+                                            class="combo-field w-1/4 px-3 py-1 border border-gray-300 rounded-md">
+                                        <input type="text" placeholder="Option" value="${comboItem.option || ''}" 
+                                            data-combo-field="option" data-index="${index}" data-combo-index="${comboIndex}" 
+                                            class="combo-field w-1/4 px-3 py-1 border border-gray-300 rounded-md">
+                                        <button class="delete-combo text-red-500 hover:text-red-700" data-index="${index}" data-combo-index="${comboIndex}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="add-combo mt-2 text-sm text-[#D62616] hover:text-[#a01c10]" data-index="${index}">
+                            <i class="fas fa-plus mr-1"></i> Add Combo Item
+                        </button>
+                    </div>
+                    ` : ''}
                 `;
                 itemsContainer.appendChild(itemCard);
             });
@@ -605,11 +677,48 @@
             document.querySelectorAll('.item-field').forEach(field => {
                 field.addEventListener('change', updateItemField);
                 field.addEventListener('input', updateItemField);
+                
+                // Add dropdown functionality for tags
+                if (field.dataset.field === 'tags') {
+                    const dropdown = document.getElementById(`tags-dropdown-${field.dataset.index}`);
+                    
+                    field.addEventListener('focus', () => {
+                        dropdown.classList.remove('hidden');
+                    });
+                    
+                    field.addEventListener('blur', () => {
+                        setTimeout(() => {
+                            dropdown.classList.add('hidden');
+                        }, 200);
+                    });
+                    
+                    // Add click handlers for dropdown items
+                    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const tag = item.dataset.tag;
+                            const currentValue = field.value;
+                            const currentTags = currentValue ? currentValue.split(',').map(t => t.trim()) : [];
+                            
+                            if (!currentTags.includes(tag)) {
+                                currentTags.push(tag);
+                                field.value = currentTags.join(', ');
+                                updateItemField({target: field});
+                            }
+                            
+                            dropdown.classList.add('hidden');
+                        });
+                    });
+                }
             });
 
             document.querySelectorAll('.option-field').forEach(field => {
                 field.addEventListener('change', updateOptionField);
                 field.addEventListener('input', updateOptionField);
+            });
+
+            document.querySelectorAll('.combo-field').forEach(field => {
+                field.addEventListener('change', updateComboField);
+                field.addEventListener('input', updateComboField);
             });
 
             document.querySelectorAll('.delete-item').forEach(button => {
@@ -620,8 +729,16 @@
                 button.addEventListener('click', deleteOption);
             });
 
+            document.querySelectorAll('.delete-combo').forEach(button => {
+                button.addEventListener('click', deleteCombo);
+            });
+
             document.querySelectorAll('.add-option').forEach(button => {
                 button.addEventListener('click', addOption);
+            });
+
+            document.querySelectorAll('.add-combo').forEach(button => {
+                button.addEventListener('click', addCombo);
             });
         }
 
@@ -635,7 +752,7 @@
                 value = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
             } else if (field === 'price' || field === 'mealPriceModifier') {
                 value = parseFloat(value) || 0;
-            } else if (field === 'showSlider' || field === 'sauces' || field === 'vegetables' || field === 'showDrinksDropdown') {
+            } else if (field === 'showSlider' || field === 'sauces' || field === 'vegetables' || field === 'showDrinksDropdown' || field === 'bs') {
                 value = event.target.checked;
             }
             
@@ -668,6 +785,31 @@
             updateJsonTextEditor();
         }
 
+        // Update combo field
+        function updateComboField(event) {
+            const index = parseInt(event.target.dataset.index);
+            const comboIndex = parseInt(event.target.dataset.comboIndex);
+            const field = event.target.dataset.comboField;
+            let value = event.target.value;
+            
+            if (field === 'quantity') {
+                value = parseInt(value) || 1;
+            }
+            
+            // Initialize comboItems array if it doesn't exist
+            if (!currentJsonData.items[index].comboItems) {
+                currentJsonData.items[index].comboItems = [];
+            }
+            
+            // Initialize comboItem object if it doesn't exist
+            if (!currentJsonData.items[index].comboItems[comboIndex]) {
+                currentJsonData.items[index].comboItems[comboIndex] = {};
+            }
+            
+            currentJsonData.items[index].comboItems[comboIndex][field] = value;
+            updateJsonTextEditor();
+        }
+
         // Delete item
         function deleteItem(event) {
             const index = parseInt(event.currentTarget.dataset.index);
@@ -695,6 +837,24 @@
             }
         }
 
+        // Delete combo
+        function deleteCombo(event) {
+            const index = parseInt(event.currentTarget.dataset.index);
+            const comboIndex = parseInt(event.currentTarget.dataset.comboIndex);
+            
+            if (currentJsonData.items[index].comboItems) {
+                currentJsonData.items[index].comboItems.splice(comboIndex, 1);
+                
+                // Remove comboItems array if empty
+                if (currentJsonData.items[index].comboItems.length === 0) {
+                    delete currentJsonData.items[index].comboItems;
+                }
+                
+                renderItemsEditor();
+                updateJsonTextEditor();
+            }
+        }
+
         // Add option
         function addOption(event) {
             const index = parseInt(event.currentTarget.dataset.index);
@@ -707,6 +867,25 @@
             currentJsonData.items[index].options.push({
                 name: '',
                 price: 0
+            });
+            
+            renderItemsEditor();
+            updateJsonTextEditor();
+        }
+
+        // Add combo
+        function addCombo(event) {
+            const index = parseInt(event.currentTarget.dataset.index);
+            
+            // Initialize comboItems array if it doesn't exist
+            if (!currentJsonData.items[index].comboItems) {
+                currentJsonData.items[index].comboItems = [];
+            }
+            
+            currentJsonData.items[index].comboItems.push({
+                name: '',
+                quantity: 1,
+                option: ''
             });
             
             renderItemsEditor();
@@ -734,8 +913,18 @@
                         <input type="text" id="new-item-image" class="w-full px-3 py-2 border border-gray-300 rounded-md" value="images/">
                     </div>
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated) *</label>
-                        <input type="text" id="new-item-tags" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tags *</label>
+                        <div class="dropdown-container">
+                            <input type="text" id="new-item-tags" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Click to select tags" required>
+                            <div class="dropdown-menu hidden" id="new-tags-dropdown">
+                                ${Object.keys(tagDefinitions).map(tag => `
+                                    <div class="dropdown-item" data-tag="${tag}">
+                                        <span class="font-medium">${tag}</span>
+                                        <div class="tag-info">${tagDefinitions[tag]}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Meal Price Modifier</label>
@@ -757,6 +946,10 @@
                         <input type="checkbox" id="new-item-showDrinksDropdown" class="h-5 w-5 text-[#D62616] rounded">
                         <label class="ml-2 text-sm font-medium text-gray-700">Show Drinks Dropdown</label>
                     </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="new-item-bs" class="h-5 w-5 text-[#D62616] rounded">
+                        <label class="ml-2 text-sm font-medium text-gray-700">Best Seller (bs)</label>
+                    </div>
                     <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Options</label>
                         <div id="new-item-options" class="space-y-2 mb-2">
@@ -766,11 +959,51 @@
                             <i class="fas fa-plus mr-1"></i> Add Option
                         </button>
                     </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Combo Items</label>
+                        <div id="new-item-combo" class="space-y-2 mb-2">
+                            <!-- Combo items will be added here -->
+                        </div>
+                        <button type="button" id="add-new-combo" class="text-sm text-[#D62616] hover:text-[#a01c10]">
+                            <i class="fas fa-plus mr-1"></i> Add Combo Item
+                        </button>
+                    </div>
                 </div>
             `;
             
             // Add event listener for adding options in the new item form
             document.getElementById('add-new-option').addEventListener('click', addNewOption);
+            document.getElementById('add-new-combo').addEventListener('click', addNewCombo);
+            
+            // Add dropdown functionality for tags in new item form
+            const tagsInput = document.getElementById('new-item-tags');
+            const tagsDropdown = document.getElementById('new-tags-dropdown');
+            
+            tagsInput.addEventListener('focus', () => {
+                tagsDropdown.classList.remove('hidden');
+            });
+            
+            tagsInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    tagsDropdown.classList.add('hidden');
+                }, 200);
+            });
+            
+            // Add click handlers for dropdown items
+            tagsDropdown.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const tag = item.dataset.tag;
+                    const currentValue = tagsInput.value;
+                    const currentTags = currentValue ? currentValue.split(',').map(t => t.trim()) : [];
+                    
+                    if (!currentTags.includes(tag)) {
+                        currentTags.push(tag);
+                        tagsInput.value = currentTags.join(', ');
+                    }
+                    
+                    tagsDropdown.classList.add('hidden');
+                });
+            });
             
             newItemModal.classList.remove('hidden');
         }
@@ -800,6 +1033,35 @@
             });
         }
 
+        // Add combo to new item form
+        function addNewCombo() {
+            const comboContainer = document.getElementById('new-item-combo');
+            const comboIndex = comboContainer.children.length;
+            
+            const comboDiv = document.createElement('div');
+            comboDiv.className = 'combo-item';
+            comboDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <input type="text" placeholder="Item name" 
+                        class="new-combo-name w-1/2 px-3 py-1 border border-gray-300 rounded-md">
+                    <input type="number" placeholder="Quantity" 
+                        class="new-combo-quantity w-1/4 px-3 py-1 border border-gray-300 rounded-md" value="1">
+                    <input type="text" placeholder="Option" 
+                        class="new-combo-option w-1/4 px-3 py-1 border border-gray-300 rounded-md">
+                    <button class="remove-new-combo text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            comboContainer.appendChild(comboDiv);
+            
+            // Add event listener to remove button
+            comboDiv.querySelector('.remove-new-combo').addEventListener('click', function() {
+                comboContainer.removeChild(comboDiv);
+            });
+        }
+
         // Hide new item modal
         function hideNewItemModal() {
             newItemModal.classList.add('hidden');
@@ -825,7 +1087,8 @@
                 showSlider: document.getElementById('new-item-showSlider').checked,
                 sauces: document.getElementById('new-item-sauces').checked,
                 vegetables: document.getElementById('new-item-vegetables').checked,
-                showDrinksDropdown: document.getElementById('new-item-showDrinksDropdown').checked
+                showDrinksDropdown: document.getElementById('new-item-showDrinksDropdown').checked,
+                bs: document.getElementById('new-item-bs').checked
             };
             
             const price = document.getElementById('new-item-price').value;
@@ -853,6 +1116,31 @@
                 // Remove options if empty
                 if (newItem.options.length === 0) {
                     delete newItem.options;
+                }
+            }
+            
+            // Process combo items
+            const comboElements = document.querySelectorAll('#new-item-combo > div');
+            if (comboElements.length > 0) {
+                newItem.comboItems = [];
+                
+                comboElements.forEach(comboEl => {
+                    const comboName = comboEl.querySelector('.new-combo-name').value;
+                    const comboQuantity = comboEl.querySelector('.new-combo-quantity').value;
+                    const comboOption = comboEl.querySelector('.new-combo-option').value;
+                    
+                    if (comboName) {
+                        newItem.comboItems.push({
+                            name: comboName,
+                            quantity: parseInt(comboQuantity) || 1,
+                            option: comboOption || ''
+                        });
+                    }
+                });
+                
+                // Remove comboItems if empty
+                if (newItem.comboItems.length === 0) {
+                    delete newItem.comboItems;
                 }
             }
             
